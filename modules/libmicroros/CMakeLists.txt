@@ -30,6 +30,24 @@ set(external_project_cxxflags
     "${includes_cxx} ${definitions_cxx} ${options_cxx} ${system_includes_cxx}"
     )
 
+# zephyr-chipyard-sw local: inject SDK 1.0.0-beta1 + picolibc compat shim
+# into the colcon meta-build's CFLAGS (see zephyr_sdk_compat.h for rationale).
+# The compat-includes dir provides shimmed Zephyr headers that moved between
+# Zephyr 4.1 (which upstream tests against) and 4.2 (this repo).
+set(_microros_compat_header "${CMAKE_CURRENT_SOURCE_DIR}/zephyr_sdk_compat.h")
+set(_microros_compat_includes "${CMAKE_CURRENT_SOURCE_DIR}/zephyr_compat_includes")
+if(EXISTS "${_microros_compat_header}")
+    set(_microros_compat_cflags
+        "-D__STDC_WANT_LIB_EXT1__=0 -include ${_microros_compat_header} -I${_microros_compat_includes}"
+        )
+    set(external_project_cflags
+        "${external_project_cflags} ${_microros_compat_cflags}"
+        )
+    set(external_project_cxxflags
+        "${external_project_cxxflags} ${_microros_compat_cflags}"
+        )
+endif()
+
 include(ExternalProject)
 
 externalproject_add(libmicroros_project
