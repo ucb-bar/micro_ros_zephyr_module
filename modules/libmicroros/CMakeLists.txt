@@ -4,6 +4,39 @@ if(CONFIG_MICROROS)
 
 set(MICROROS_DIR ${ZEPHYR_CURRENT_MODULE_DIR})
 
+# zephyr-chipyard-sw local: tie inner colcon-build state to the outer Zephyr
+# build-dir lifecycle.
+#
+# The libmicroros makefile writes its outputs into MICROROS_DIR (inside the
+# submodule) — both the slow caches (cloned ROS sources, ament tools install)
+# and the fast outputs (build/install/log dirs, libmicroros.a, headers,
+# configured_colcon.meta, zephyr_toolchain.cmake). `west build -p` only wipes
+# CMAKE_BINARY_DIR, so the inner colcon CMakeCache.txts persist across
+# pristine builds — masking changes to compile flags / toolchain config.
+#
+# Detect a freshly-pristine outer build via the absence of a stamp file in
+# CMAKE_BINARY_DIR. When pristine, wipe the inner build/install/log + final
+# artifacts so colcon re-configures with current flags. Preserve the
+# expensive caches (micro_ros_src/src, micro_ros_dev) which take minutes to
+# regenerate and don't carry stale state.
+set(_microros_outer_stamp "${CMAKE_BINARY_DIR}/.microros_inner_state.stamp")
+if(NOT EXISTS "${_microros_outer_stamp}")
+    message(STATUS "micro-ROS: pristine outer build — wiping inner colcon state at ${MICROROS_DIR}")
+    foreach(_p
+        "${MICROROS_DIR}/micro_ros_src/build"
+        "${MICROROS_DIR}/micro_ros_src/install"
+        "${MICROROS_DIR}/micro_ros_src/log"
+        "${MICROROS_DIR}/libmicroros.a"
+        "${MICROROS_DIR}/include"
+        "${MICROROS_DIR}/configured_colcon.meta"
+        "${MICROROS_DIR}/zephyr_toolchain.cmake")
+        if(EXISTS "${_p}")
+            file(REMOVE_RECURSE "${_p}")
+        endif()
+    endforeach()
+    file(WRITE "${_microros_outer_stamp}" "outer-build-tracked\n")
+endif()
+
 if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
 set(submake "$(MAKE)")
 else()
